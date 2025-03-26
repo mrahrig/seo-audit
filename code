@@ -1,0 +1,130 @@
+const fs = require('fs');
+const path = require('path');
+
+function scanDir(dir) {
+  const files = [];
+  fs.readdirSync(dir).forEach(file => {
+    const fullPath = path.join(dir, file);
+    if (fs.statSync(fullPath).isDirectory()) {
+      files.push(...scanDir(fullPath));
+    } else if (fullPath.endsWith('.tsx') || fullPath.endsWith('.mdx')) {
+      files.push(fullPath);
+    }
+  });
+  return files;
+}
+
+// Function to analyze SEO components
+function checkSEO(files) {
+  let foundIssues = false;
+
+  files.forEach(file => {
+    const content = fs.readFileSync(file, 'utf-8');
+
+    console.log(`📂 Analyzing: ${file}`);
+
+    // Check for SEO Title & Meta Description
+    if (content.includes('export const metadata')) {
+      const titleMatch = content.match(/title:\s*['"`](.*?)['"`]/);
+      const descriptionMatch = content.match(/description:\s*['"`](.*?)['"`]/);
+
+      if (titleMatch) {
+        console.log(`✅ SEO Title: "${titleMatch[1]}"`);
+      } else {
+        console.log(`❌ Missing SEO Title!`);
+        foundIssues = true;
+      }
+
+      if (descriptionMatch) {
+        console.log(`✅ Meta Description: "${descriptionMatch[1]}"`);
+      } else {
+        console.log(`❌ Missing Meta Description!`);
+        foundIssues = true;
+      }
+    } else {
+      console.log(`❌ No metadata (title & description) found!`);
+      foundIssues = true;
+    }
+
+    // Check for Header Tags (H1, H2, H3)
+    const h1Matches = content.match(/<h1[^>]*>/g) || [];
+    const h2Matches = content.match(/<h2[^>]*>/g) || [];
+    const h3Matches = content.match(/<h3[^>]*>/g) || [];
+    const paragraphMatches = content.match(/<p[^>]*>/g) || [];
+
+    console.log(`📝 Headers found: H1 (${h1Matches.length}), H2 (${h2Matches.length}), H3 (${h3Matches.length}), Paragraphs (${paragraphMatches.length})`);
+
+    if (h1Matches.length > 1) {
+      console.log(`❌ Warning: Multiple H1 tags found! (Only one is recommended)`);
+      foundIssues = true;
+    }
+
+    if (h1Matches.length === 0) {
+      console.log(`❌ Missing H1 tag! Every page should have one.`);
+      foundIssues = true;
+    }
+
+    // Check Image Descriptions & Alt Text
+    const imageMatches = content.match(/<Image[^>]*>/g) || [];
+    imageMatches.forEach(image => {
+      const altMatch = image.match(/alt=['"`]([^'"`]+)['"`]/);
+      if (altMatch) {
+        console.log(`✅ Found Image Alt Text: "${altMatch[1]}"`);
+      } else {
+        console.log(`❌ Missing alt text in: ${image}`);
+        foundIssues = true;
+      }
+    });
+
+    // Check for Backlinks (Internal & External)
+    const linkMatches = content.match(/<a[^>]*href=['"`]([^'"`]+)['"`][^>]*>/g) || [];
+    linkMatches.forEach(link => {
+      const hrefMatch = link.match(/href=['"`]([^'"`]+)['"`]/);
+      if (hrefMatch) {
+        const url = hrefMatch[1];
+        if (url.startsWith('http')) {
+          console.log(`🔗 External Link: ${url}`);
+        } else {
+          console.log(`🔗 Internal Link: ${url}`);
+        }
+      }
+    });
+
+    // Check for Schema Markup
+    if (content.includes('script type="application/ld+json"')) {
+      console.log(`✅ Found Schema Markup!`);
+    } else {
+      console.log(`❌ No Schema Markup detected.`);
+      foundIssues = true;
+    }
+
+    // Check for Rich Results (Open Graph, Twitter Cards)
+    if (content.includes('og:') || content.includes('twitter:')) {
+      console.log(`✅ Found Rich Results Markup (Open Graph / Twitter Cards)`);
+    } else {
+      console.log(`❌ No Open Graph or Twitter Card metadata detected.`);
+      foundIssues = true;
+    }
+
+    // Check for URL Tails (Friendly URLs)
+    const fileName = path.basename(file, path.extname(file));
+    if (fileName.includes('_') || fileName.length > 50) {
+      console.log(`❌ Warning: URL tail may not be optimized (${fileName})`);
+      foundIssues = true;
+    } else {
+      console.log(`✅ Friendly URL Tail: ${fileName}`);
+    }
+
+    console.log("\n"); // Add spacing for readability
+  });
+
+  if (!foundIssues) {
+    console.log("🎉 No major SEO issues detected! Your site is looking good.");
+  }
+}
+
+// Run the script
+const projectDir = './src'; // Adjust if necessary
+const files = scanDir(projectDir);
+checkSEO(files);
+
